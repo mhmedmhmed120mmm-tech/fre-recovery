@@ -65,27 +65,49 @@
         auth: { detectSessionInUrl: true, persistSession: false }
       });
 
-      const params = new URLSearchParams(location.hash.slice(1));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const type = params.get('type');
+      const query = new URLSearchParams(location.search);
+      const hash = new URLSearchParams(location.hash.slice(1));
 
-      if (type !== 'recovery' || !accessToken || !refreshToken) {
-        message.textContent = 'افتح الصفحة باستخدام رابط الاستعادة الجديد من بريدك.';
-      } else {
-        const { error } = await supabase.auth.setSession({
+      const code = query.get('code');
+      const accessToken = hash.get('access_token');
+      const refreshToken = hash.get('refresh_token');
+      const tokenHash = query.get('token_hash');
+      const type = query.get('type') || hash.get('type');
+
+      let error = null;
+      let session = null;
+
+      if (code) {
+        const result = await supabase.auth.exchangeCodeForSession(code);
+        error = result.error;
+        session = result.data?.session;
+      } else if (tokenHash && type === 'recovery') {
+        const result = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery'
+        });
+        error = result.error;
+        session = result.data?.session;
+      } else if (accessToken && refreshToken && type === 'recovery') {
+        const result = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
         });
+        error = result.error;
+        session = result.data?.session;
+      } else {
+        error = new Error('Missing recovery credentials');
+      }
 
-        history.replaceState({}, '', location.pathname);
+      history.replaceState({}, '', location.pathname);
 
-        if (error) {
-          message.textContent = 'الرابط غير صالح أو انتهت صلاحيته.';
-        } else {
-          message.textContent = 'اختر كلمة مرور جديدة من 12 حرفاً على الأقل.';
-          form.hidden = false;
-        }
+      if (error || !session) {
+        message.textContent =
+          'رابط الاستعادة غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً.';
+      } else {
+        message.textContent =
+          'اختر كلمة مرور جديدة من 12 حرفاً على الأقل.';
+        form.hidden = false;
       }
 
       save.onclick = async () => {
@@ -120,4 +142,3 @@
   </script>
 </body>
 </html>
-
