@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fre | استعادة كلمة المرور</title>
+  <style>
+    body {
+      background: #101827;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #1b2940;
+      border-radius: 18px;
+      padding: 25px;
+      width: min(85%, 360px);
+      text-align: center;
+    }
+    h1 { color: #208aef; }
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 14px;
+      margin-top: 12px;
+      border-radius: 9px;
+      border: 0;
+      font-size: 15px;
+    }
+    input { background: #101827; color: white; }
+    button { background: #208aef; color: white; font-weight: bold; }
+    button:disabled { opacity: .5; }
+    #message { line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>فري</h1>
+    <h2>استعادة كلمة المرور</h2>
+    <p id="message">جاري التحقق من الرابط...</p>
+    <div id="form" hidden>
+      <input id="password" type="password" placeholder="كلمة المرور الجديدة" autocomplete="new-password">
+      <input id="confirm" type="password" placeholder="تأكيد كلمة المرور" autocomplete="new-password">
+      <button id="save">حفظ كلمة المرور</button>
+    </div>
+  </div>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    const projectUrl = 'https://cvppwgvrgxggkeqvaxnc.supabase.co';
+    const publicKey = 'sb_publishable_u4pfFu2TQKVE9nNF1VmYpg_8KIvOSDv';
+    const message = document.getElementById('message');
+    const form = document.getElementById('form');
+    const save = document.getElementById('save');
+
+    if (publicKey === 'REPLACE_WITH_PUBLISHABLE_KEY') {
+      message.textContent = 'الصفحة تحتاج إعداد مفتاح Supabase العام.';
+    } else {
+      const supabase = createClient(projectUrl, publicKey, {
+        auth: { detectSessionInUrl: true, persistSession: false }
+      });
+
+      const params = new URLSearchParams(location.hash.slice(1));
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const type = params.get('type');
+
+      if (type !== 'recovery' || !accessToken || !refreshToken) {
+        message.textContent = 'افتح الصفحة باستخدام رابط الاستعادة الجديد من بريدك.';
+      } else {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        history.replaceState({}, '', location.pathname);
+
+        if (error) {
+          message.textContent = 'الرابط غير صالح أو انتهت صلاحيته.';
+        } else {
+          message.textContent = 'اختر كلمة مرور جديدة من 12 حرفاً على الأقل.';
+          form.hidden = false;
+        }
+      }
+
+      save.onclick = async () => {
+        const password = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm').value;
+
+        if (password.length < 12) {
+          message.textContent = 'كلمة المرور يجب أن تكون 12 حرفاً على الأقل.';
+          return;
+        }
+        if (password !== confirm) {
+          message.textContent = 'كلمتا المرور غير متطابقتين.';
+          return;
+        }
+
+        save.disabled = true;
+        const { error } = await supabase.auth.updateUser({ password });
+
+        if (error) {
+          message.textContent = 'تعذر تغيير كلمة المرور. اطلب رابطاً جديداً.';
+          save.disabled = false;
+          return;
+        }
+
+        await supabase.auth.signOut();
+        document.getElementById('password').value = '';
+        document.getElementById('confirm').value = '';
+        form.hidden = true;
+        message.textContent = 'تم تغيير كلمة المرور بنجاح.';
+      };
+    }
+  </script>
+</body>
+</html>
